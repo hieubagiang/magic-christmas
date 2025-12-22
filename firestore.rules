@@ -1,0 +1,17 @@
+rules_version = '2';
+service "cloud.firestore" {
+  match /databases/{database}/documents {
+    // Public read for photos metadata
+    match /photos/{document=**} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth.uid == resource.data.uid;
+    }
+    
+    // Config per user/session
+    match /config/{document=**} {
+      allow read: if true;
+      allow write: if true; // Anonymous allowed for demo
+    }
+  }
+}
