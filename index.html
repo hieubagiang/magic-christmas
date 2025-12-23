@@ -128,8 +128,14 @@
         <label>📷 Upload Photos:</label>
         <input type="file" id="photo-upload" accept="image/*" multiple onchange="handlePhotoUpload(event)">
         <div class="thumbnail-preview" id="photo-thumbnails"></div>
-        <small style="color: rgba(255,255,255,0.5); display: block; margin-top: 5px;">
-            💡 Auto-compressed to 600px @ 50% quality (~200KB/photo). IndexedDB storage (50MB+).
+        
+        <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer;">
+            <input type="checkbox" id="compression-toggle" checked onchange="toggleCompression()" 
+                   style="width: auto; cursor: pointer;">
+            <span>🗜️ Enable image compression (600px, 50% quality)</span>
+        </label>
+        <small id="compression-hint" style="color: rgba(255,215,0,0.7); display: block; margin-top: 5px;">
+            💡 Compression ON: ~200KB/photo, IndexedDB (50MB+)
         </small>
         
         <label>🎵 YouTube Music Link:</label>
@@ -170,6 +176,7 @@
         let bgMusic = null;
         let currentYoutubeId = null;
         let uploadedPhotos = [];
+        let compressionEnabled = true; // Compression toggle state
 
         const loader = new THREE.TextureLoader();
         const photoTextures = [];
@@ -327,6 +334,7 @@
         async function saveToLocalStorage() {
             const config = {
                 youtubeLink: document.getElementById('youtube-link').value,
+                compressionEnabled: compressionEnabled,
                 timestamp: Date.now()
             };
             try {
@@ -384,9 +392,17 @@
                 
                 // Load config from IndexedDB
                 const config = await getConfigFromDB();
-                if (config && config.youtubeLink) {
-                    document.getElementById('youtube-link').value = config.youtubeLink;
-                    console.log('✅ Restored YouTube link');
+                if (config) {
+                    if (config.youtubeLink) {
+                        document.getElementById('youtube-link').value = config.youtubeLink;
+                        console.log('✅ Restored YouTube link');
+                    }
+                    if (typeof config.compressionEnabled !== 'undefined') {
+                        compressionEnabled = config.compressionEnabled;
+                        document.getElementById('compression-toggle').checked = compressionEnabled;
+                        toggleCompression(); // Update UI hint
+                        console.log(`✅ Restored compression setting: ${compressionEnabled ? 'ON' : 'OFF'}`);
+                    }
                 }
             } catch (e) {
                 console.error('Failed to load from IndexedDB:', e);
@@ -407,6 +423,21 @@
                     alert('⚠️ Error clearing storage');
                 }
             }
+        }
+        
+        function toggleCompression() {
+            compressionEnabled = document.getElementById('compression-toggle').checked;
+            const hint = document.getElementById('compression-hint');
+            if (compressionEnabled) {
+                hint.innerHTML = '💡 Compression ON: ~200KB/photo, IndexedDB (50MB+)';
+                hint.style.color = 'rgba(255,215,0,0.7)';
+            } else {
+                hint.innerHTML = '⚠️ Compression OFF: Original size (may hit storage limits faster)';
+                hint.style.color = 'rgba(255,100,100,0.8)';
+            }
+            // Save preference
+            saveToLocalStorage();
+            console.log(`🗜️ Compression ${compressionEnabled ? 'enabled' : 'disabled'}`);
         }
         
         async function removePhoto(index) {
@@ -447,33 +478,46 @@
             
             for (const file of files) {
                 try {
-                    // Warn about very large files
                     const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
-                    if (file.size > 10 * 1024 * 1024) {
-                        console.warn(`⚠️ Large file: ${file.name} (${fileSizeMB}MB) - will be heavily compressed`);
-                    }
+                    let finalDataUrl;
+                    let displaySize;
                     
-                    // Compress image before saving
-                    const compressedDataUrl = await compressImage(file);
-                    
-                    // Check compressed size
-                    const compressedSizeKB = (compressedDataUrl.length * 0.75 / 1024).toFixed(1);
-                    if (compressedSizeKB > 500) {
-                        console.warn(`⚠️ Compressed image still large: ${compressedSizeKB}KB`);
+                    if (compressionEnabled) {
+                        // Warn about very large files
+                        if (file.size > 10 * 1024 * 1024) {
+                            console.warn(`⚠️ Large file: ${file.name} (${fileSizeMB}MB) - will be heavily compressed`);
+                        }
+                        
+                        // Compress image
+                        finalDataUrl = await compressImage(file);
+                        displaySize = (finalDataUrl.length * 0.75 / 1024).toFixed(1) + 'KB';
+                        
+                        if (finalDataUrl.length * 0.75 / 1024 > 500) {
+                            console.warn(`⚠️ Compressed image still large: ${displaySize}`);
+                        }
+                    } else {
+                        // No compression - use original
+                        finalDataUrl = await new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onload = (e) => resolve(e.target.result);
+                            reader.readAsDataURL(file);
+                        });
+                        displaySize = fileSizeMB + 'MB (original)';
+                        console.log(`📸 Original image: ${file.name} (${fileSizeMB}MB)`);
                     }
                     
                     // Save to IndexedDB
-                    await savePhotoToDB(compressedDataUrl);
-                    uploadedPhotos.push(compressedDataUrl);
+                    await savePhotoToDB(finalDataUrl);
+                    uploadedPhotos.push(finalDataUrl);
                     
                     // Create thumbnail
                     const img = document.createElement('img');
-                    img.src = compressedDataUrl;
-                    img.title = `${file.name} (${compressedSizeKB}KB, click to remove)`;
+                    img.src = finalDataUrl;
+                    img.title = `${file.name} (${displaySize}, click to remove)`;
                     img.onclick = () => removePhoto(uploadedPhotos.length - 1);
                     container.appendChild(img);
                     
-                    console.log(`✅ Loaded & compressed photo ${uploadedPhotos.length}: ${file.name}`);
+                    console.log(`✅ Loaded photo ${uploadedPhotos.length}: ${file.name} (${displaySize})`);
                 } catch (e) {
                     console.error('Failed to upload photo:', e);
                     alert(`⚠️ Failed to upload ${file.name}: ${e.message}`);
