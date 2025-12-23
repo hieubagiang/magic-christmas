@@ -340,6 +340,32 @@
         
         async function loadFromLocalStorage() {
             try {
+                // MIGRATION: Clear old localStorage if exists (v1.0 -> v1.2)
+                const oldData = localStorage.getItem('christmasConfig');
+                if (oldData) {
+                    console.warn('🔄 Migrating from localStorage to IndexedDB...');
+                    try {
+                        const oldConfig = JSON.parse(oldData);
+                        
+                        // Migrate old photos if any (already in memory, not re-saving to avoid quota)
+                        if (oldConfig.photos && oldConfig.photos.length > 0) {
+                            console.log(`Found ${oldConfig.photos.length} old photos (not migrating due to size)`);
+                        }
+                        
+                        // Migrate YouTube link
+                        if (oldConfig.youtubeLink) {
+                            await saveConfigToDB({ youtubeLink: oldConfig.youtubeLink, timestamp: Date.now() });
+                        }
+                        
+                        // Clear old storage
+                        localStorage.removeItem('christmasConfig');
+                        console.log('✅ Migration complete. Old localStorage cleared.');
+                    } catch (migrationError) {
+                        console.error('Migration failed, clearing localStorage:', migrationError);
+                        localStorage.removeItem('christmasConfig');
+                    }
+                }
+                
                 // Load photos from IndexedDB
                 const photos = await getAllPhotosFromDB();
                 if (photos && photos.length > 0) {
