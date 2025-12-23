@@ -177,6 +177,11 @@
         let currentYoutubeId = null;
         let uploadedPhotos = [];
         let compressionEnabled = true; // Compression toggle state
+        // EXPLODE auto-rotation + persistence
+        let explodeAngle = 0;              // persistent angle offset for EXPLODE rotation
+        let explodeAutoSpinEnabled = true; // auto spin in EXPLODE
+        let explodeSpinSpeed = 0.01;       // radians per frame
+        let lastExplodeSave = 0;           // timestamp for throttled saves
 
         const loader = new THREE.TextureLoader();
         const photoTextures = [];
@@ -317,6 +322,17 @@
                 request.onerror = () => reject(request.error);
             });
         }
+
+        // Merge + save config helper (preserves existing fields)
+        async function mergeSaveConfig(partial) {
+            try {
+                const existing = await getConfigFromDB();
+                const merged = Object.assign({}, existing || {}, partial, { timestamp: Date.now() });
+                await saveConfigToDB(merged);
+            } catch (e) {
+                console.error('Failed to merge-save config:', e);
+            }
+        }
         
         // Get config from IndexedDB
         async function getConfigFromDB() {
@@ -402,6 +418,14 @@
                         document.getElementById('compression-toggle').checked = compressionEnabled;
                         toggleCompression(); // Update UI hint
                         console.log(`✅ Restored compression setting: ${compressionEnabled ? 'ON' : 'OFF'}`);
+                    }
+                    if (typeof config.explodeAngle === 'number') {
+                        explodeAngle = config.explodeAngle;
+                        console.log(`✅ Restored explode angle: ${explodeAngle.toFixed(3)} rad`);
+                    }
+                    if (typeof config.explodeAutoSpinEnabled !== 'undefined') {
+                        explodeAutoSpinEnabled = !!config.explodeAutoSpinEnabled;
+                        console.log(`✅ Restored auto spin: ${explodeAutoSpinEnabled ? 'ON' : 'OFF'}`);
                     }
                 }
             } catch (e) {
@@ -917,7 +941,19 @@
             requestAnimationFrame(animate);
             const time = Date.now() * 0.001;
             const speed = 0.08;
-            const handRotY = (handX - 0.5) * 4.0;
+            let handRotY = (handX - 0.5) * 4.0;
+            // Auto spin & persistence for EXPLODE
+            if (state === 'EXPLODE') {
+                if (explodeAutoSpinEnabled) {
+                    explodeAngle += explodeSpinSpeed;
+                }
+                handRotY += explodeAngle;
+                // Throttled save of angle every ~5s
+                if (Date.now() - lastExplodeSave > 5000) {
+                    lastExplodeSave = Date.now();
+                    mergeSaveConfig({ explodeAngle, explodeAutoSpinEnabled });
+                }
+            }
 
             updateParticleGroup(groupGold, 'gold', state, speed, handRotY, time);
             updateParticleGroup(groupRed, 'red', state, speed, handRotY, time);
