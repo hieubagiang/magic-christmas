@@ -128,6 +128,9 @@
         <label>📷 Upload Photos:</label>
         <input type="file" id="photo-upload" accept="image/*" multiple onchange="handlePhotoUpload(event)">
         <div class="thumbnail-preview" id="photo-thumbnails"></div>
+        <small style="color: rgba(255,255,255,0.5); display: block; margin-top: 5px;">
+            💡 Auto-compressed to 600px @ 50% quality (~200KB/photo). IndexedDB storage (50MB+).
+        </small>
         
         <label>🎵 YouTube Music Link:</label>
         <input type="text" id="youtube-link" placeholder="https://youtube.com/watch?v=..." 
@@ -205,7 +208,7 @@
         }
         
         // Compress image before saving
-        async function compressImage(file, maxWidth = 800, quality = 0.6) {
+        async function compressImage(file, maxWidth = 600, quality = 0.5) {
             return new Promise((resolve) => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
@@ -230,7 +233,7 @@
                         const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
                         const originalSize = (e.target.result.length * 0.75 / 1024).toFixed(1);
                         const compressedSize = (compressedDataUrl.length * 0.75 / 1024).toFixed(1);
-                        console.log(`📸 Compressed: ${originalSize}KB → ${compressedSize}KB`);
+                        console.log(`📸 Compressed: ${originalSize}KB → ${compressedSize}KB (${((1 - compressedSize/originalSize) * 100).toFixed(0)}% smaller)`);
                         resolve(compressedDataUrl);
                     };
                     img.src = e.target.result;
@@ -411,10 +414,27 @@
             const files = Array.from(event.target.files);
             const container = document.getElementById('photo-thumbnails');
             
+            if (files.length > 10) {
+                alert('⚠️ Maximum 10 photos at once. Please select fewer images.');
+                return;
+            }
+            
             for (const file of files) {
                 try {
+                    // Warn about very large files
+                    const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
+                    if (file.size > 10 * 1024 * 1024) {
+                        console.warn(`⚠️ Large file: ${file.name} (${fileSizeMB}MB) - will be heavily compressed`);
+                    }
+                    
                     // Compress image before saving
                     const compressedDataUrl = await compressImage(file);
+                    
+                    // Check compressed size
+                    const compressedSizeKB = (compressedDataUrl.length * 0.75 / 1024).toFixed(1);
+                    if (compressedSizeKB > 500) {
+                        console.warn(`⚠️ Compressed image still large: ${compressedSizeKB}KB`);
+                    }
                     
                     // Save to IndexedDB
                     await savePhotoToDB(compressedDataUrl);
@@ -423,16 +443,20 @@
                     // Create thumbnail
                     const img = document.createElement('img');
                     img.src = compressedDataUrl;
-                    img.title = `${file.name} (click to remove)`;
+                    img.title = `${file.name} (${compressedSizeKB}KB, click to remove)`;
                     img.onclick = () => removePhoto(uploadedPhotos.length - 1);
                     container.appendChild(img);
                     
-                    console.log(`✅ Loaded & compressed photo ${uploadedPhotos.length}`);
+                    console.log(`✅ Loaded & compressed photo ${uploadedPhotos.length}: ${file.name}`);
                 } catch (e) {
                     console.error('Failed to upload photo:', e);
-                    alert(`⚠️ Failed to upload ${file.name}`);
+                    alert(`⚠️ Failed to upload ${file.name}: ${e.message}`);
                 }
             }
+            
+            // Show summary
+            const totalPhotos = uploadedPhotos.length;
+            console.log(`📊 Total photos stored: ${totalPhotos}`);
         }
         
         function updateMusic() {
