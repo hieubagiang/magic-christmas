@@ -202,6 +202,10 @@
         let explodeAutoSpinEnabled = true; // auto spin in EXPLODE
         let explodeSpinSpeed = 0.01;       // radians per frame
         let lastExplodeSave = 0;           // timestamp for throttled saves
+        // Spin suppression when picking/selecting photos
+        const SPIN_HOLD_MS = 1200;         // wait time after leaving PHOTO before auto-spin resumes
+        let spinHoldUntil = 0;             // epoch ms until which spin is held
+        let pinchActive = false;           // true while user is pinching (PHOTO pick)
 
         const loader = new THREE.TextureLoader();
         const photoTextures = [];
@@ -753,6 +757,7 @@
         let titleMesh, starMesh, loveMesh;
         
         let state = 'TREE'; 
+        let prevState = 'TREE';
         let selectedIndex = 0;
         let handX = 0.5;
 
@@ -1115,12 +1120,13 @@
             let handRotY = (handX - 0.5) * 4.0;
             // Auto spin & persistence for EXPLODE
             if (state === 'EXPLODE') {
-                if (explodeAutoSpinEnabled) {
+                const spinSuppressed = (Date.now() < spinHoldUntil) || pinchActive;
+                if (explodeAutoSpinEnabled && !spinSuppressed) {
                     explodeAngle += explodeSpinSpeed;
                 }
                 handRotY += explodeAngle;
                 // Throttled save of angle every ~5s
-                if (Date.now() - lastExplodeSave > 5000) {
+                if (!spinSuppressed && (Date.now() - lastExplodeSave > 5000)) {
                     lastExplodeSave = Date.now();
                     mergeSaveConfig({ explodeAngle, explodeAutoSpinEnabled });
                 }
@@ -1213,6 +1219,7 @@
                 ctx.clearRect(0,0,100,75); ctx.drawImage(results.image, 0, 0, 100, 75);
 
                 // --- Hand Logic Vandiep ---
+                const wasState = state;
                 // TWO HANDS: Heart or Explode only
                 if (results.multiHandLandmarks.length === 2) {
                     const h1 = results.multiHandLandmarks[0]; 
@@ -1236,6 +1243,10 @@
                     } else {
                         // TWO HANDS but not heart → EXPLODE mode
                         state = 'EXPLODE';
+                    }
+                    pinchActive = false;
+                    if (wasState === 'PHOTO' && state === 'EXPLODE') {
+                        spinHoldUntil = Date.now() + SPIN_HOLD_MS;
                     }
                     return;
                 }
@@ -1263,15 +1274,22 @@
                     // PINCH: thumb and index touching (photo zoom)
                     else if (pinchDist < 0.05) {
                         state = 'PHOTO'; 
+                        pinchActive = true;
                     } 
                     // OPEN HAND: fingers spread out (explode mode)
                     else {
                         state = 'EXPLODE'; 
+                        pinchActive = false;
                     }
                 } else {
                     // NO HANDS detected
                     state = 'TREE'; 
+                    pinchActive = false;
                 }
+                if (wasState === 'PHOTO' && state === 'EXPLODE') {
+                    spinHoldUntil = Date.now() + SPIN_HOLD_MS;
+                }
+                prevState = wasState;
             });
 
             const cameraUtils = new Camera(video, {
@@ -1297,7 +1315,9 @@
                 console.log('🎄 Switched to TREE state');
                 e.preventDefault();
             } else if (e.key === '2') {
+                const was = state;
                 state = 'EXPLODE';
+                if (was === 'PHOTO') { spinHoldUntil = Date.now() + SPIN_HOLD_MS; }
                 console.log('💥 Switched to EXPLODE state');
                 e.preventDefault();
             } else if (e.key === '3') {
@@ -1307,6 +1327,7 @@
             } else if (e.key === '4') {
                 if (photoCount > 0) {
                     state = 'PHOTO';
+                    pinchActive = true; // treat keyboard PHOTO like a pick
                     console.log('📷 Switched to PHOTO state');
                 } else {
                     console.log('⚠️ No photos uploaded');
