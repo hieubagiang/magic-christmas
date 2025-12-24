@@ -137,6 +137,15 @@
         <small id="compression-hint" style="color: rgba(255,215,0,0.7); display: block; margin-top: 5px;">
             💡 Compression ON: ~200KB/photo, IndexedDB (50MB+)
         </small>
+
+        <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer;">
+            <input type="checkbox" id="spin-toggle" checked onchange="toggleAutoSpin()" 
+                   style="width: auto; cursor: pointer;">
+            <span>🌀 Auto-rotate photos in EXPLODE</span>
+        </label>
+        <small id="spin-hint" style="color: rgba(255,215,0,0.7); display: block; margin-top: 5px;">
+            💡 Auto-spin ON. Use ← / → to fine-tune angle.
+        </small>
         
         <label>🎵 YouTube Music Link:</label>
         <input type="text" id="youtube-link" placeholder="https://youtube.com/watch?v=..." 
@@ -351,6 +360,8 @@
             const config = {
                 youtubeLink: document.getElementById('youtube-link').value,
                 compressionEnabled: compressionEnabled,
+                explodeAutoSpinEnabled,
+                explodeAngle,
                 timestamp: Date.now()
             };
             try {
@@ -462,6 +473,21 @@
             // Save preference
             saveToLocalStorage();
             console.log(`🗜️ Compression ${compressionEnabled ? 'enabled' : 'disabled'}`);
+        }
+
+        function toggleAutoSpin() {
+            explodeAutoSpinEnabled = document.getElementById('spin-toggle').checked;
+            const spinHint = document.getElementById('spin-hint');
+            if (spinHint) {
+                spinHint.innerHTML = explodeAutoSpinEnabled
+                    ? '💡 Auto-spin ON. Use ← / → to fine-tune angle.'
+                    : 'ℹ️ Auto-spin OFF. Use ← / → to rotate manually.';
+                spinHint.style.color = explodeAutoSpinEnabled
+                    ? 'rgba(255,215,0,0.7)'
+                    : 'rgba(180,200,255,0.8)';
+            }
+            mergeSaveConfig({ explodeAutoSpinEnabled });
+            console.log(`🌀 Auto-spin ${explodeAutoSpinEnabled ? 'enabled' : 'disabled'}`);
         }
         
         async function removePhoto(index) {
@@ -625,25 +651,24 @@
             });
         }
 
-        function createCustomTexture(type) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 128; canvas.height = 128;
-            const ctx = canvas.getContext('2d');
-            const cx = 64, cy = 64;
-
-            if (type === 'gold_glow') {
-                const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 40);
-                grd.addColorStop(0, '#FFFFFF'); 
-                grd.addColorStop(0.2, '#FFFFE0'); 
-                grd.addColorStop(0.5, '#FFD700');
-                grd.addColorStop(1, 'rgba(0,0,0,0)');
-                ctx.fillStyle = grd; ctx.fillRect(0,0,128,128);
-
-            } else if (type === 'red_light') {
-                const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 50);
-                grd.addColorStop(0, '#FFAAAA'); 
-                grd.addColorStop(0.3, '#FF0000'); 
-                grd.addColorStop(1, 'rgba(0,0,0,0)');
+                                    if (typeof config.explodeAngle === 'number') {
+                                        explodeAngle = config.explodeAngle;
+                                        console.log(`✅ Restored explode angle: ${explodeAngle.toFixed(3)} rad`);
+                                    }
+                                    if (typeof config.explodeAutoSpinEnabled !== 'undefined') {
+                                        explodeAutoSpinEnabled = !!config.explodeAutoSpinEnabled;
+                                        const spinToggle = document.getElementById('spin-toggle');
+                                        const spinHint = document.getElementById('spin-hint');
+                                        if (spinToggle) spinToggle.checked = explodeAutoSpinEnabled;
+                                        if (spinHint) {
+                                            spinHint.innerHTML = explodeAutoSpinEnabled 
+                                                ? '💡 Auto-spin ON. Use ← / → to fine-tune angle.'
+                                                : 'ℹ️ Auto-spin OFF. Use ← / → to rotate manually.';
+                                            spinHint.style.color = explodeAutoSpinEnabled
+                                                ? 'rgba(255,215,0,0.7)'
+                                                : 'rgba(180,200,255,0.8)';
+                                        }
+                                        console.log(`✅ Restored auto spin: ${explodeAutoSpinEnabled ? 'ON' : 'OFF'}`);
                 ctx.fillStyle = grd; ctx.fillRect(0,0,128,128);
 
             } else if (type === 'gift_red') {
@@ -1116,6 +1141,21 @@
         // Load saved config on page load Vandiep
         window.addEventListener('DOMContentLoaded', () => {
             loadFromLocalStorage();
+        });
+
+        // Keyboard controls for EXPLODE angle
+        window.addEventListener('keydown', (e) => {
+            if (state !== 'EXPLODE') return;
+            const step = 0.1; // radians
+            if (e.key === 'ArrowLeft') {
+                explodeAngle -= step;
+                mergeSaveConfig({ explodeAngle, explodeAutoSpinEnabled });
+                e.preventDefault();
+            } else if (e.key === 'ArrowRight') {
+                explodeAngle += step;
+                mergeSaveConfig({ explodeAngle, explodeAutoSpinEnabled });
+                e.preventDefault();
+            }
         });
     </script>
 </body>
