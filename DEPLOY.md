@@ -32,28 +32,29 @@ git push origin main
 # Connect to server via SSH
 ssh root@hieuit.top
 
-# Navigate to web root
-cd /var/www
+# Navigate to web root (actual nginx root directory)
+cd /root/magic-christmas
 
-# Backup current version (optional)
-mv html html.backup.$(date +%Y%m%d_%H%M%S)
+# Verify current version
+git log --oneline -1
 
-# Clone fresh copy from GitHub
-git clone https://github.com/hieubagiang/magic-christmas.git html
+# Force update to latest (discards local changes)
+git reset --hard origin/main
 
 # Verify files
-cd html
 ls -la
 
-# Check Nginx status
-systemctl status nginx
+# Reload Nginx to clear cache
+systemctl reload nginx
 ```
 
 ### 3. **Quick Update (Pull Changes)**
-If repository already exists on server:
+One-line command from local machine:
 ```bash
-ssh root@hieuit.top 'cd /var/www/html && git pull origin main'
+ssh root@hieuit.top 'cd /root/magic-christmas && git reset --hard origin/main && systemctl reload nginx'
 ```
+
+**Important:** Nginx serves from `/root/magic-christmas/` (not `/var/www/html`).
 
 ---
 
@@ -94,20 +95,21 @@ curl -I https://hieuit.top
 ## 📁 Project Structure on Server
 
 ```
-/var/www/html/
+/root/magic-christmas/         # ← Actual Nginx root directory
 ├── index.html                 # Main application
 ├── index ver1.0.html         # Version history
 ├── index ver1.2.html         # Version history
 ├── audio/                    # Audio assets (optional)
 ├── images/                   # Static images
-├── scripts/
-│   └── enable_https_nginx.sh # SSL setup script
 ├── .github/
 │   └── copilot-instructions.md
 ├── FIREBASE_SETUP.md         # Firebase config guide
 ├── firestore.indexes.json    # Firestore indexes
 └── DEPLOY.md                 # This file
 ```
+
+**Nginx Config:** `/etc/nginx/sites-available/magic-christmas`  
+**Document Root:** `/root/magic-christmas`
 
 ---
 
@@ -193,10 +195,17 @@ certbot --nginx -d hieuit.top --force-renewal
 
 ### Issue: Changes Not Showing
 ```bash
-# Clear browser cache (Ctrl+Shift+R)
-# Or force reload on server
-ssh root@hieuit.top 'cd /var/www/html && git reset --hard origin/main && git pull'
+# 1. Clear browser cache (Ctrl+Shift+R or Ctrl+F5)
+# 2. Check console version (F12): Should show v1.3.0+
+
+# 3. Force reload on server (correct directory)
+ssh root@hieuit.top 'cd /root/magic-christmas && git reset --hard origin/main && systemctl reload nginx'
+
+# 4. Verify deployed version
+ssh root@hieuit.top 'cd /root/magic-christmas && git log --oneline -1'
 ```
+
+**Common Cause:** Browser cache or wrong deployment directory. Nginx serves from `/root/magic-christmas/`.
 
 ### Issue: IndexedDB Not Working
 - Check browser console (F12)
@@ -220,8 +229,14 @@ curl -I https://hieuit.top
 
 ### View Recent Git Changes on Server
 ```bash
-ssh root@hieuit.top 'cd /var/www/html && git log --oneline -5'
+ssh root@hieuit.top 'cd /root/magic-christmas && git log --oneline -5'
 ```
+
+### Check Version Info
+Open https://hieuit.top and press F12 (Console) to see:
+- Version number (e.g., v1.3.0)
+- Build date
+- Feature list
 
 ---
 
@@ -245,8 +260,9 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /var/www/html
+            cd /root/magic-christmas
             git pull origin main
+            systemctl reload nginx
 ```
 
 ---
@@ -262,9 +278,10 @@ jobs:
 
 ## 🎄 Version History
 
+- **v1.3** - Aspect-ratio photos + rounded frames + version logging (Dec 24, 2025)
 - **v1.2** - IndexedDB + Image Compression (Dec 24, 2025)
 - **v1.0** - Initial release with localStorage
-- **Current:** IndexedDB storage, HTTPS enabled, auto-renewal configured
+- **Current:** Fixed deployment path to `/root/magic-christmas/`
 
 ---
 
