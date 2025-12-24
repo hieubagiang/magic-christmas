@@ -938,9 +938,15 @@
                 const frameH = targetH + margin * 2;
                 const borderGeo = new THREE.PlaneGeometry(frameW, frameH);
                 const borderTex = createFrameTexture(frameW, frameH, 0.9);
-                const borderMat = new THREE.MeshBasicMaterial({ map: borderTex, transparent: true, side: THREE.DoubleSide });
+                const borderMat = new THREE.MeshBasicMaterial({ 
+                    map: borderTex, 
+                    transparent: true, 
+                    side: THREE.DoubleSide,
+                    depthWrite: false
+                });
                 const border = new THREE.Mesh(borderGeo, borderMat);
-                border.position.z = -0.05;
+                border.position.z = 0.05; // render slightly in front of photo to avoid being clipped
+                border.renderOrder = 1;
 
                 mesh.add(border);
                 mesh.visible = false; mesh.scale.set(0, 0, 0);
