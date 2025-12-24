@@ -95,8 +95,9 @@
             flex-wrap: wrap; max-height: 80px; overflow-y: auto;
         }
         .thumbnail-preview img {
-            width: 50px; height: 50px; object-fit: cover;
-            border: 2px solid #FFD700; border-radius: 5px;
+            height: 50px; width: auto; max-width: 80px;
+            object-fit: contain; background: rgba(255,255,255,0.05);
+            border: 2px solid #FFD700; border-radius: 8px; padding: 2px;
             cursor: pointer; transition: all 0.2s;
         }
         .thumbnail-preview img:hover {
@@ -832,7 +833,7 @@
         }
 
         // Create a golden rounded frame texture matching target world size
-        function createFrameTexture(worldW, worldH, radius = 0.6) {
+        function createFrameTexture(worldW, worldH, radius = 0.9) {
             const scale = 64; // pixels per world unit for crisp strokes
             const cw = Math.max(256, Math.round(worldW * scale));
             const ch = Math.max(256, Math.round(worldH * scale));
@@ -840,7 +841,7 @@
             canvas.width = cw; canvas.height = ch;
             const ctx = canvas.getContext('2d');
 
-            const lw = Math.max(6, Math.round(0.10 * Math.min(cw, ch))); // line width ~10% of min side
+            const lw = Math.max(4, Math.round(0.08 * Math.min(cw, ch))); // thinner stroke (~8%)
             const r = Math.max(12, Math.round(radius * scale));
             const inset = Math.round(lw / 2);
 
@@ -890,7 +891,7 @@
                 const aspect = (photoMeta[i] && photoMeta[i].aspect) ? photoMeta[i].aspect : 1;
                 const targetH = 8; // world units
                 const targetW = targetH * aspect;
-                const margin = 0.8; // frame margin around photo
+                const margin = 0.5; // frame margin around photo (thinner)
 
                 const geo = new THREE.PlaneGeometry(targetW, targetH);
                 const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
@@ -899,7 +900,7 @@
                 const frameW = targetW + margin * 2;
                 const frameH = targetH + margin * 2;
                 const borderGeo = new THREE.PlaneGeometry(frameW, frameH);
-                const borderTex = createFrameTexture(frameW, frameH, 0.6);
+                const borderTex = createFrameTexture(frameW, frameH, 0.9);
                 const borderMat = new THREE.MeshBasicMaterial({ map: borderTex, transparent: true, side: THREE.DoubleSide });
                 const border = new THREE.Mesh(borderGeo, borderMat);
                 border.position.z = -0.05;
