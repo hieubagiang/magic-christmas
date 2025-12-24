@@ -166,7 +166,8 @@
     <div id="ui-layer">
         <!-- Vandiep -->
         <div class="guide">
-            🖐 <b>Open:</b> Explode &nbsp;|&nbsp; 🫶 <b>Heart:</b> Love &nbsp;|&nbsp; ✊ <b>Fist:</b> Tree
+            🖐 <b>Open:</b> Explode &nbsp;|&nbsp; 🫶 <b>Heart:</b> Love &nbsp;|&nbsp; ✊ <b>Fist:</b> Tree<br>
+            <span style="font-size: 11px; opacity: 0.7;">⌨️ Keys: 1=Tree, 2=Explode, 3=Heart, 4=Photos, ←/→=Navigate</span>
         </div>
         <button id="btnStart" onclick="startSystem()">START MAGIC</button>
     </div>
@@ -1253,18 +1254,56 @@
             loadFromLocalStorage();
         });
 
-        // Keyboard controls for EXPLODE angle
+        // Keyboard controls for state switching and navigation
         window.addEventListener('keydown', (e) => {
-            if (state !== 'EXPLODE') return;
-            const step = 0.1; // radians
-            if (e.key === 'ArrowLeft') {
-                explodeAngle -= step;
-                mergeSaveConfig({ explodeAngle, explodeAutoSpinEnabled });
+            // State switching shortcuts (numbers 1-4)
+            if (e.key === '1') {
+                state = 'TREE';
+                console.log('🎄 Switched to TREE state');
                 e.preventDefault();
-            } else if (e.key === 'ArrowRight') {
-                explodeAngle += step;
-                mergeSaveConfig({ explodeAngle, explodeAutoSpinEnabled });
+            } else if (e.key === '2') {
+                state = 'EXPLODE';
+                console.log('💥 Switched to EXPLODE state');
                 e.preventDefault();
+            } else if (e.key === '3') {
+                state = 'HEART';
+                console.log('❤️ Switched to HEART state');
+                e.preventDefault();
+            } else if (e.key === '4') {
+                if (photoCount > 0) {
+                    state = 'PHOTO';
+                    console.log('📷 Switched to PHOTO state');
+                } else {
+                    console.log('⚠️ No photos uploaded');
+                }
+                e.preventDefault();
+            }
+            
+            // PHOTO state navigation (left/right arrows)
+            if (state === 'PHOTO' && photoCount > 0) {
+                if (e.key === 'ArrowLeft') {
+                    selectedIndex = (selectedIndex - 1 + photoCount) % photoCount;
+                    console.log(`📸 Photo ${selectedIndex + 1}/${photoCount}`);
+                    e.preventDefault();
+                } else if (e.key === 'ArrowRight') {
+                    selectedIndex = (selectedIndex + 1) % photoCount;
+                    console.log(`📸 Photo ${selectedIndex + 1}/${photoCount}`);
+                    e.preventDefault();
+                }
+            }
+            
+            // EXPLODE angle adjustment (left/right arrows when not in PHOTO state)
+            if (state === 'EXPLODE') {
+                const step = 0.1; // radians
+                if (e.key === 'ArrowLeft') {
+                    explodeAngle -= step;
+                    mergeSaveConfig({ explodeAngle, explodeAutoSpinEnabled });
+                    e.preventDefault();
+                } else if (e.key === 'ArrowRight') {
+                    explodeAngle += step;
+                    mergeSaveConfig({ explodeAngle, explodeAutoSpinEnabled });
+                    e.preventDefault();
+                }
             }
         });
     </script>
