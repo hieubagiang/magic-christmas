@@ -194,6 +194,7 @@
 
         const loader = new THREE.TextureLoader();
         const photoTextures = [];
+        const photoMeta = []; // { aspect: number, width: number, height: number }
         let photoCount = 0;
         
         // ==========================================
@@ -617,66 +618,76 @@
         // Load images from uploaded files or default folder Vandiep
         function loadImages() {
             return new Promise((resolve) => {
+                // Helper to resolve when all textures are loaded
+                const maybeResolve = (expected) => {
+                    if (photoTextures.length >= expected) {
+                        photoCount = photoTextures.length;
+                        console.log(`✅ Loaded ${photoCount} image texture(s)`);
+                        resolve();
+                    }
+                };
+
                 if (uploadedPhotos.length > 0) {
-                    // Use uploaded photos
+                    const total = uploadedPhotos.length;
                     uploadedPhotos.forEach(dataUrl => {
-                        const texture = loader.load(dataUrl);
-                        photoTextures.push(texture);
+                        loader.load(
+                            dataUrl,
+                            (tex) => {
+                                photoTextures.push(tex);
+                                const img = tex.image;
+                                const w = img && img.width ? img.width : 1;
+                                const h = img && img.height ? img.height : 1;
+                                photoMeta.push({ aspect: w / h, width: w, height: h });
+                                maybeResolve(total);
+                            },
+                            undefined,
+                            (err) => {
+                                console.warn('Failed to load uploaded photo texture', err);
+                                maybeResolve(total);
+                            }
+                        );
                     });
-                    photoCount = uploadedPhotos.length;
-                    console.log(`Loaded ${photoCount} uploaded images`);
-                    resolve();
                 } else {
-                    // Auto-detect images from folder
+                    // Auto-detect images from folder (image1.jpeg, image2.jpeg, ...)
                     let index = 1;
-                    const checkImage = () => {
-                        const img = new Image();
-                        img.onload = () => {
-                            photoTextures.push(loader.load(`./images/image${index}.jpeg`));
-                            photoCount++;
-                            index++;
-                            checkImage();
+                    const found = [];
+                    const tryNext = () => {
+                        const url = `./images/image${index}.jpeg`;
+                        const probe = new Image();
+                        probe.onload = () => {
+                            loader.load(
+                                url,
+                                (tex) => {
+                                    found.push(url);
+                                    photoTextures.push(tex);
+                                    const img = tex.image;
+                                    const w = img && img.width ? img.width : 1;
+                                    const h = img && img.height ? img.height : 1;
+                                    photoMeta.push({ aspect: w / h, width: w, height: h });
+                                    index++;
+                                    tryNext();
+                                },
+                                undefined,
+                                () => {
+                                    // If texture fails, still move on
+                                    index++;
+                                    tryNext();
+                                }
+                            );
                         };
-                        img.onerror = () => {
-                            console.log(`Loaded ${photoCount} images from folder`);
-                            if (photoCount === 0) {
+                        probe.onerror = () => {
+                            console.log(`Loaded ${found.length} images from folder`);
+                            if (found.length === 0) {
                                 alert('⚠️ No images found! Please upload photos in Settings.');
                             }
+                            photoCount = photoTextures.length;
                             resolve();
                         };
-                        img.src = `./images/image${index}.jpeg`;
+                        probe.src = url;
                     };
-                    checkImage();
+                    tryNext();
                 }
             });
-        }
-
-                                    if (typeof config.explodeAngle === 'number') {
-                                        explodeAngle = config.explodeAngle;
-                                        console.log(`✅ Restored explode angle: ${explodeAngle.toFixed(3)} rad`);
-                                    }
-                                    if (typeof config.explodeAutoSpinEnabled !== 'undefined') {
-                                        explodeAutoSpinEnabled = !!config.explodeAutoSpinEnabled;
-                                        const spinToggle = document.getElementById('spin-toggle');
-                                        const spinHint = document.getElementById('spin-hint');
-                                        if (spinToggle) spinToggle.checked = explodeAutoSpinEnabled;
-                                        if (spinHint) {
-                                            spinHint.innerHTML = explodeAutoSpinEnabled 
-                                                ? '💡 Auto-spin ON. Use ← / → to fine-tune angle.'
-                                                : 'ℹ️ Auto-spin OFF. Use ← / → to rotate manually.';
-                                            spinHint.style.color = explodeAutoSpinEnabled
-                                                ? 'rgba(255,215,0,0.7)'
-                                                : 'rgba(180,200,255,0.8)';
-                                        }
-                                        console.log(`✅ Restored auto spin: ${explodeAutoSpinEnabled ? 'ON' : 'OFF'}`);
-                ctx.fillStyle = grd; ctx.fillRect(0,0,128,128);
-
-            } else if (type === 'gift_red') {
-                ctx.fillStyle = '#D32F2F'; ctx.fillRect(20, 20, 88, 88);
-                ctx.fillStyle = '#FFD700'; ctx.fillRect(54, 20, 20, 88); ctx.fillRect(20, 54, 88, 20);
-                ctx.strokeStyle = "rgba(0,0,0,0.3)"; ctx.lineWidth=2; ctx.strokeRect(20,20,88,88);
-            }
-            return new THREE.CanvasTexture(canvas);
         }
 
         const textures = {
@@ -820,19 +831,81 @@
             return points;
         }
 
-        function createPhotos() {
-            const geo = new THREE.PlaneGeometry(8, 8);
-            const borderGeo = new THREE.PlaneGeometry(9, 9); 
-            const borderMat = new THREE.MeshBasicMaterial({ color: 0xFFD700 }); 
+        // Create a golden rounded frame texture matching target world size
+        function createFrameTexture(worldW, worldH, radius = 0.6) {
+            const scale = 64; // pixels per world unit for crisp strokes
+            const cw = Math.max(256, Math.round(worldW * scale));
+            const ch = Math.max(256, Math.round(worldH * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = cw; canvas.height = ch;
+            const ctx = canvas.getContext('2d');
 
-            // Dynamic photo count Vandiep
-            for(let i=0; i<photoCount; i++) {
-                const mat = new THREE.MeshBasicMaterial({ map: photoTextures[i], side: THREE.DoubleSide });
+            const lw = Math.max(6, Math.round(0.10 * Math.min(cw, ch))); // line width ~10% of min side
+            const r = Math.max(12, Math.round(radius * scale));
+            const inset = Math.round(lw / 2);
+
+            const roundRect = (ctx, x, y, w, h, r) => {
+                const rr = Math.min(r, Math.floor(Math.min(w, h) / 2));
+                ctx.moveTo(x + rr, y);
+                ctx.arcTo(x + w, y, x + w, y + h, rr);
+                ctx.arcTo(x + w, y + h, x, y + h, rr);
+                ctx.arcTo(x, y + h, x, y, rr);
+                ctx.arcTo(x, y, x + w, y, rr);
+            };
+
+            // Background transparent
+            ctx.clearRect(0, 0, cw, ch);
+
+            // Outer golden stroke with glow
+            const grad = ctx.createLinearGradient(0, 0, cw, 0);
+            grad.addColorStop(0.0, '#FFF4C2');
+            grad.addColorStop(0.5, '#FFD700');
+            grad.addColorStop(1.0, '#B8860B');
+            ctx.strokeStyle = grad;
+            ctx.lineWidth = lw;
+            ctx.shadowColor = 'rgba(255,215,0,0.6)';
+            ctx.shadowBlur = Math.round(lw * 1.2);
+            ctx.beginPath();
+            roundRect(ctx, inset, inset, cw - inset * 2, ch - inset * 2, r);
+            ctx.stroke();
+
+            // Inner subtle highlight
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+            ctx.lineWidth = Math.max(2, Math.round(lw * 0.35));
+            ctx.beginPath();
+            roundRect(ctx, inset + lw, inset + lw, cw - (inset + lw) * 2, ch - (inset + lw) * 2, Math.max(6, r - lw));
+            ctx.stroke();
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.anisotropy = 4;
+            tex.needsUpdate = true;
+            return tex;
+        }
+
+        function createPhotos() {
+            // Dynamic photo count Vandiep with preserved aspect ratio
+            for (let i = 0; i < photoCount; i++) {
+                const tex = photoTextures[i];
+                const aspect = (photoMeta[i] && photoMeta[i].aspect) ? photoMeta[i].aspect : 1;
+                const targetH = 8; // world units
+                const targetW = targetH * aspect;
+                const margin = 0.8; // frame margin around photo
+
+                const geo = new THREE.PlaneGeometry(targetW, targetH);
+                const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
                 const mesh = new THREE.Mesh(geo, mat);
+
+                const frameW = targetW + margin * 2;
+                const frameH = targetH + margin * 2;
+                const borderGeo = new THREE.PlaneGeometry(frameW, frameH);
+                const borderTex = createFrameTexture(frameW, frameH, 0.6);
+                const borderMat = new THREE.MeshBasicMaterial({ map: borderTex, transparent: true, side: THREE.DoubleSide });
                 const border = new THREE.Mesh(borderGeo, borderMat);
-                border.position.z = -0.1; 
+                border.position.z = -0.05;
+
                 mesh.add(border);
-                mesh.visible = false; mesh.scale.set(0,0,0);
+                mesh.visible = false; mesh.scale.set(0, 0, 0);
                 scene.add(mesh);
                 photoMeshes.push(mesh);
             }
