@@ -1182,11 +1182,11 @@
                 titleMesh.visible = false; starMesh.visible = false; loveMesh.visible = false;
                 photoMeshes.forEach((mesh, i) => {
                     if (i === selectedIndex) {
-                        mesh.position.lerp(new THREE.Vector3(0, 0, 60), 0.1);
-                        mesh.scale.lerp(new THREE.Vector3(5, 5, 5), 0.1);
+                        mesh.position.lerp(new THREE.Vector3(0, 0, 60), 0.06);
+                        mesh.scale.lerp(new THREE.Vector3(5, 5, 5), 0.06);
                         mesh.lookAt(camera.position); mesh.rotation.z = 0;
                     } else {
-                        mesh.scale.lerp(new THREE.Vector3(0,0,0), 0.1);
+                        mesh.scale.lerp(new THREE.Vector3(0,0,0), 0.06);
                     }
                 });
             }
