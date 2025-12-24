@@ -1168,9 +1168,10 @@
                     const x = Math.sin(angle) * CONFIG.photoOrbitRadius;
                     const z = Math.cos(angle) * CONFIG.photoOrbitRadius;
                     const y = Math.sin(time + i) * 3;
-                    // During settle phase, lerp much slower to avoid jitter from orbit position changes
-                    const posLerpSpeed = inSettlePhase ? 0.02 : 0.1;
-                    mesh.position.lerp(new THREE.Vector3(x, y, z), posLerpSpeed);
+                    // During settle phase, freeze orbit position completely to avoid jitter
+                    if (!inSettlePhase) {
+                        mesh.position.lerp(new THREE.Vector3(x, y, z), 0.1);
+                    }
                     mesh.lookAt(camera.position);
                     if (z > maxZ) { maxZ = z; bestIdx = i; }
                     if (z > 5) { 
