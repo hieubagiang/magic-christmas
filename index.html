@@ -206,6 +206,7 @@
         const SPIN_HOLD_MS = 1200;         // wait time after leaving PHOTO before auto-spin resumes
         let spinHoldUntil = 0;             // epoch ms until which spin is held
         let pinchActive = false;           // true while user is pinching (PHOTO pick)
+        let photoSettleUntil = 0;          // epoch ms until which photos settle (no orbit lerp)
 
         const loader = new THREE.TextureLoader();
         const photoTextures = [];
@@ -1160,13 +1161,16 @@
                 const baseAngle = groupGold.rotation.y; 
                 const angleStep = (Math.PI * 2) / photoCount; // Dynamic Vandiep
                 let bestIdx = 0; let maxZ = -999;
+                const inSettlePhase = Date.now() < photoSettleUntil;
                 photoMeshes.forEach((mesh, i) => {
                     mesh.visible = true;
                     const angle = baseAngle + i * angleStep;
                     const x = Math.sin(angle) * CONFIG.photoOrbitRadius;
                     const z = Math.cos(angle) * CONFIG.photoOrbitRadius;
-                    const y = Math.sin(time + i) * 3; 
-                    mesh.position.lerp(new THREE.Vector3(x, y, z), 0.1);
+                    const y = Math.sin(time + i) * 3;
+                    // During settle phase, lerp much slower to avoid jitter from orbit position changes
+                    const posLerpSpeed = inSettlePhase ? 0.02 : 0.1;
+                    mesh.position.lerp(new THREE.Vector3(x, y, z), posLerpSpeed);
                     mesh.lookAt(camera.position);
                     if (z > maxZ) { maxZ = z; bestIdx = i; }
                     if (z > 5) { 
@@ -1247,6 +1251,7 @@
                     pinchActive = false;
                     if (wasState === 'PHOTO' && state === 'EXPLODE') {
                         spinHoldUntil = Date.now() + SPIN_HOLD_MS;
+                        photoSettleUntil = Date.now() + SPIN_HOLD_MS;
                     }
                     return;
                 }
@@ -1288,6 +1293,7 @@
                 }
                 if (wasState === 'PHOTO' && state === 'EXPLODE') {
                     spinHoldUntil = Date.now() + SPIN_HOLD_MS;
+                    photoSettleUntil = Date.now() + SPIN_HOLD_MS;
                 }
                 prevState = wasState;
             });
@@ -1317,7 +1323,10 @@
             } else if (e.key === '2') {
                 const was = state;
                 state = 'EXPLODE';
-                if (was === 'PHOTO') { spinHoldUntil = Date.now() + SPIN_HOLD_MS; }
+                if (was === 'PHOTO') { 
+                    spinHoldUntil = Date.now() + SPIN_HOLD_MS;
+                    photoSettleUntil = Date.now() + SPIN_HOLD_MS;
+                }
                 console.log('💥 Switched to EXPLODE state');
                 e.preventDefault();
             } else if (e.key === '3') {
